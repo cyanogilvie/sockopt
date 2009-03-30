@@ -1,0 +1,125 @@
+if {[lsearch [namespace children] ::tcltest] == -1} {
+	package require tcltest
+	namespace import ::tcltest::*
+}
+
+package require sockopt
+
+test sockopt-1.1 {setsockopt} -body { #<<<
+	set listen	[socket -server [list apply {
+		{con cl_ip cl_port} {
+			#close $con
+		}
+	}] 1234]
+	set client	[socket localhost 1234]
+
+	set before	[sockopt::getsockopt $client SOL_SOCKET SO_KEEPALIVE]
+	sockopt::setsockopt $client SOL_SOCKET SO_KEEPALIVE 1 
+	set after	[sockopt::getsockopt $client SOL_SOCKET SO_KEEPALIVE]
+	list $before $after
+} -cleanup {
+	if {[info exists client]} {
+		if {$client in [chan names]} {
+			chan close $client
+		}
+		unset client
+	}
+	if {[info exists listen]} {
+		if {$listen in [chan names]} {
+			chan close $listen
+		}
+		unset listen
+	}
+	foreach var {before after} {
+		if {[info exists $var]} {
+			unset $var
+		}
+	}
+} -result {0 1}
+
+#>>>
+test sockopt-1.2 {setsockopt short keepalive} -body { #<<<
+	set listen	[socket -server [list apply {
+		{con cl_ip cl_port} {
+			#close $con
+		}
+	}] 1234]
+	set client	[socket localhost 1234]
+
+	set before	{}
+	lappend before	[sockopt::getsockopt $client SOL_SOCKET SO_KEEPALIVE]
+	lappend before	[sockopt::getsockopt $client SOL_TCP TCP_KEEPIDLE]
+	lappend before	[sockopt::getsockopt $client SOL_TCP TCP_KEEPCNT]
+	lappend before	[sockopt::getsockopt $client SOL_TCP TCP_KEEPINTVL]
+	sockopt::setsockopt $client SOL_SOCKET SO_KEEPALIVE 1 
+	sockopt::setsockopt $client SOL_TCP TCP_KEEPIDLE	120
+	sockopt::setsockopt $client SOL_TCP TCP_KEEPCNT		2
+	sockopt::setsockopt $client SOL_TCP TCP_KEEPINTVL	20
+	set after	{}
+	lappend after	[sockopt::getsockopt $client SOL_SOCKET SO_KEEPALIVE]
+	lappend after	[sockopt::getsockopt $client SOL_TCP TCP_KEEPIDLE]
+	lappend after	[sockopt::getsockopt $client SOL_TCP TCP_KEEPCNT]
+	lappend after	[sockopt::getsockopt $client SOL_TCP TCP_KEEPINTVL]
+	list $before $after
+} -cleanup {
+	if {[info exists client]} {
+		if {$client in [chan names]} {
+			chan close $client
+		}
+		unset client
+	}
+	if {[info exists listen]} {
+		if {$listen in [chan names]} {
+			chan close $listen
+		}
+		unset listen
+	}
+	foreach var {before after} {
+		if {[info exists $var]} {
+			unset $var
+		}
+	}
+} -result {{0 7200 9 75} {1 120 2 20}}
+
+#>>>
+test sockopt-1.3 {setsockopt nodelay} -body { #<<<
+	set listen	[socket -server [list apply {
+		{con cl_ip cl_port} {
+			#close $con
+		}
+	}] 1234]
+	set client	[socket localhost 1234]
+
+	set before	[sockopt::getsockopt $client IPPROTO_TCP TCP_NODELAY]
+	#sockopt::setsockopt $client IPPROTO_TCP TCP_NODELAY 1 
+	sockopt::setsockopt $client SOL_TCP TCP_NODELAY 1 
+	set after	[sockopt::getsockopt $client IPPROTO_TCP TCP_NODELAY]
+	list $before $after
+} -cleanup {
+	if {[info exists client]} {
+		if {$client in [chan names]} {
+			chan close $client
+		}
+		unset client
+	}
+	if {[info exists listen]} {
+		if {$listen in [chan names]} {
+			chan close $listen
+		}
+		unset listen
+	}
+	foreach var {before after} {
+		if {[info exists $var]} {
+			unset $var
+		}
+	}
+} -result {0 1}
+
+#>>>
+
+
+# cleanup
+::tcltest::cleanupTests
+return
+
+# vim: ft=tcl foldmethod=marker foldmarker=<<<,>>> ts=4 shiftwidth=4
