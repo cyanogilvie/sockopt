@@ -7,3 +7,4 @@ libsock*.so
 *.o
 pkgIndex.tcl
 teapot.txt
+teapot
