@@ -1,5 +1,6 @@
-#include <tclstuff.h>
+#include "tclstuff.h"
 #include <string.h>
+#include <stddef.h>
 #include <sys/types.h>
 #include <sys/socket.h>
 #include <netinet/tcp.h>
@@ -12,7 +13,7 @@ static int glue_setsockopt(cdata, interp, objc, objv) //<<<
 	Tcl_Obj* CONST	objv[];
 {
 	ClientData				st;
-	int						s, optval, res, tmpres, tmpoptval;
+	int						s, optval, res, tmpoptval;
 	Tcl_Channel				chan;
 	const Tcl_ChannelType*	chantype;
 	socklen_t				optlen = sizeof(optval);
@@ -36,6 +37,7 @@ static int glue_setsockopt(cdata, interp, objc, objv) //<<<
 
 	static CONST char* optnames[] = {
 		"SO_KEEPALIVE",
+		"SO_REUSEADDR",
 		"TCP_KEEPCNT",
 		"TCP_KEEPIDLE",
 		"TCP_KEEPINTVL",
@@ -44,6 +46,7 @@ static int glue_setsockopt(cdata, interp, objc, objv) //<<<
 	};
 	int optname_map[] = {
 		SO_KEEPALIVE,
+		SO_REUSEADDR,
 		TCP_KEEPCNT,
 		TCP_KEEPIDLE,
 		TCP_KEEPINTVL,
@@ -63,8 +66,7 @@ static int glue_setsockopt(cdata, interp, objc, objv) //<<<
 
 	if (Tcl_GetChannelHandle(chan, TCL_WRITABLE, &st) != TCL_OK)
 		THROW_ERROR("Could not retrieve OS socket handle");
-	s = (long int)st;	// This is not cool
-	//fprintf(stderr, "setsockopt chan is \"%s\" s is %d\n", Tcl_GetString(objv[1]), s);
+	s = (ptrdiff_t)st;
 
 	TEST_OK(Tcl_GetIndexFromObj(interp, objv[2], levels, "level",
 				TCL_EXACT, &level_index));
@@ -74,23 +76,14 @@ static int glue_setsockopt(cdata, interp, objc, objv) //<<<
 
 	TEST_OK(Tcl_GetIntFromObj(interp, objv[4], &optval));
 
-	tmpres = getsockopt(s, level_map[level_index], optname_map[optname_index],
+	getsockopt(s, level_map[level_index], optname_map[optname_index],
 			&tmpoptval, &optlen);
-	//fprintf(stderr, "before %d = getsockopt(%d, %d, %d, &tmpoptval(%d), &optlen(%d))\n",
-	//		tmpres, s, level_map[level_index], optname_map[optname_index],
-	//		tmpoptval, optlen);
 
-	//fprintf(stderr, "setsockopt(%d, %d, %d, %d, %ld);\n",
-	//		s, level_map[level_index], optname_map[optname_index],
-	//		optval, sizeof(int));
 	res = setsockopt(s, level_map[level_index], optname_map[optname_index],
 			(const void*)&optval, sizeof(int));
 
-	tmpres = getsockopt(s, level_map[level_index], optname_map[optname_index],
+	getsockopt(s, level_map[level_index], optname_map[optname_index],
 			&tmpoptval, &optlen);
-	//fprintf(stderr, "after %d = getsockopt(%d, %d, %d, &tmpoptval(%d), &optlen(%d))\n",
-	//		tmpres, s, level_map[level_index], optname_map[optname_index],
-	//		tmpoptval, optlen);
 
 	if (res == 0) {
 		return TCL_OK;
@@ -109,7 +102,7 @@ static int glue_getsockopt(cdata, interp, objc, objv) //<<<
 {
 	ClientData				st;
 	int						s, optval, res;
-	int						tmpoptval, tmpres;
+	int						tmpoptval;
 	Tcl_Channel				chan;
 	const Tcl_ChannelType*	chantype;
 	socklen_t				optlen = sizeof(optval);
@@ -134,6 +127,7 @@ static int glue_getsockopt(cdata, interp, objc, objv) //<<<
 
 	static CONST char* optnames[] = {
 		"SO_KEEPALIVE",
+		"SO_REUSEADDR",
 		"TCP_KEEPCNT",
 		"TCP_KEEPIDLE",
 		"TCP_KEEPINTVL",
@@ -142,6 +136,7 @@ static int glue_getsockopt(cdata, interp, objc, objv) //<<<
 	};
 	int optname_map[] = {
 		SO_KEEPALIVE,
+		SO_REUSEADDR,
 		TCP_KEEPCNT,
 		TCP_KEEPIDLE,
 		TCP_KEEPINTVL,
@@ -161,8 +156,7 @@ static int glue_getsockopt(cdata, interp, objc, objv) //<<<
 
 	if (Tcl_GetChannelHandle(chan, TCL_WRITABLE, &st) != TCL_OK)
 		THROW_ERROR("Could not retrieve OS socket handle");
-	s = (long int)st;	// This is not cool
-	//fprintf(stderr, "getsockopt chan is \"%s\" s is %d\n", Tcl_GetString(objv[1]), s);
+	s = (ptrdiff_t)st;
 
 	TEST_OK(Tcl_GetIndexFromObj(interp, objv[2], levels, "level",
 				TCL_EXACT, &level_index));
@@ -172,13 +166,8 @@ static int glue_getsockopt(cdata, interp, objc, objv) //<<<
 
 	res = getsockopt(s, level_map[level_index], optname_map[optname_index],
 			&optval, &optlen);
-	//fprintf(stderr, "--- before %d = getsockopt(%d, %d, %d, &optval(%d), &optlen(%d))\n",
-	//		res, s, level_map[level_index], optname_map[optname_index],
-	//		optval, optlen);
 
-	tmpres = getsockopt(s, SOL_SOCKET, SO_KEEPALIVE, &tmpoptval, &optlen);
-	//fprintf(stderr, "--- %d = getsockopt(%d, SOL_SOCKET, SO_KEEPALIVE): %d\n",
-	//		tmpres, s, tmpoptval);
+	getsockopt(s, SOL_SOCKET, SO_KEEPALIVE, &tmpoptval, &optlen);
 
 	if (res == 0) {
 		staging_optval = optval;
@@ -215,8 +204,12 @@ static int glue_dumpsockopt(cdata, interp, objc, objv) //<<<
 
 	if (Tcl_GetChannelHandle(chan, TCL_WRITABLE, &st) != TCL_OK)
 		THROW_ERROR("Could not retrieve OS socket handle");
-	s = (long int)st;	// This is not cool
+	s = (ptrdiff_t)st;
 	fprintf(stderr, "dumpsockopt chan is \"%s\" s is %d\n", Tcl_GetString(objv[1]), s);
+
+	res = getsockopt(s, SOL_SOCKET, SO_REUSEADDR, &optval, &optlen);
+	fprintf(stderr, "--- %d = getsockopt(%d, SOL_SOCKET, SO_REUSEADDR): %d\n",
+			res, s, optval);
 
 	res = getsockopt(s, SOL_SOCKET, SO_KEEPALIVE, &optval, &optlen);
 	fprintf(stderr, "--- %d = getsockopt(%d, SOL_SOCKET, SO_KEEPALIVE): %d\n",
